@@ -1,0 +1,111 @@
+# ============================================
+# .gitignore Universal — Copy & Paste
+# ============================================
+
+# --- OS ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editor/IDE ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+.classpath
+*.code-workspace
+.history/
+
+# --- Dependencies ---
+node_modules/
+vendor/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# --- Build ---
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.parcel-cache/
+*.egg-info/
+
+# --- Env ---
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# --- Secrets ---
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+*-credentials.json
+secrets.yaml
+secrets.json
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+
+# --- Cache ---
+.cache/
+.cache
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# --- Testing ---
+coverage/
+.nyc_output/
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# --- Temp ---
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*~
+
+# --- Large files ---
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*.mp4
+*.mp3
+*.wav
+*.flac
+*.psd
+*.ai
+*.sketch
