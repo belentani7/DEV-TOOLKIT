@@ -11,6 +11,7 @@ Requiere: pip install requests
 """
 
 import sys
+import os
 import time
 import json
 import argparse
@@ -18,24 +19,25 @@ import concurrent.futures
 import requests
 
 # Providers gratuitos configurados
+# Las claves se leen de variables de entorno — NUNCA hardcodeadas (repo publico).
 PROVIDERS = {
     "groq": {
         "url": "https://api.groq.com/openai/v1/chat/completions",
-        "key": "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",
+        "key": os.environ.get("GROQ_API_KEY", ""),
         "model": "llama-3.3-70b-versatile",
         "headers_key": "Authorization",
         "prefix": "Bearer "
     },
     "nvidia": {
         "url": "https://integrate.api.nvidia.com/v1/chat/completions",
-        "key": "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",
+        "key": os.environ.get("NVIDIA_API_KEY", ""),
         "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
         "headers_key": "Authorization",
         "prefix": "Bearer "
     },
     "openrouter": {
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "key": "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",
+        "key": os.environ.get("OPENROUTER_API_KEY", ""),
         "model": "google/gemma-2-9b-it:free",
         "headers_key": "Authorization",
         "prefix": "Bearer "
