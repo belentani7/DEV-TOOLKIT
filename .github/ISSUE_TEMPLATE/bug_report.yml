@@ -1,0 +1,20 @@
+name: Reporte de bug
+description: Algo no funciona como debería
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: ¿Qué pasa?
+      description: Describe el problema y los pasos para reproducirlo.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: ¿Qué esperabas que pasara?
+  - type: input
+    id: entorno
+    attributes:
+      label: Entorno
+      placeholder: "Navegador / SO / versión"
