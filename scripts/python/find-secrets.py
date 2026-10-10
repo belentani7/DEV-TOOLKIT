@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import json
+import fnmatch
 import argparse
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def should_exclude(path):
     for part in parts:
         if part in EXCLUDE_DIRS:
             return True
-        if any(part.endswith(ext) for ext in EXCLUDE_FILES):
+        if any(fnmatch.fnmatch(part.lower(), ext.lower()) for ext in EXCLUDE_FILES):
             return True
     
     return False
