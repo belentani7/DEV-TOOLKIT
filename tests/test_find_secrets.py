@@ -81,5 +81,21 @@ class ExcludeFilesTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+
+    def test_findings_do_not_expose_credentials(self):
+        tmp = tempfile.mkdtemp(prefix="redaction_test_")
+        try:
+            secret = "A" * 24
+            target = os.path.join(tmp, "credentials.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("api_key = '" + secret + "'\\n")
+            findings = self.mod.scan_file(target)
+            self.assertTrue(findings)
+            self.assertNotIn(secret, str(findings))
+            self.assertEqual(findings[0]["match"], "[REDACTED]")
+            self.assertEqual(findings[0]["context"], "[REDACTED]")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 if __name__ == "__main__":
     unittest.main()
