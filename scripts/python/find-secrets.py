@@ -88,8 +88,10 @@ def scan_file(filepath):
                         "file": str(filepath),
                         "line": line_num,
                         "type": pattern_name,
-                        "match": match.group()[:80],
-                        "context": line.strip()[:120]
+                        # A scanner must not echo exposed credentials
+                        # into CI logs, chat output or exported JSON.
+                        "match": "[REDACTED]",
+                        "context": "[REDACTED]"
                     })
     except Exception:
         pass
