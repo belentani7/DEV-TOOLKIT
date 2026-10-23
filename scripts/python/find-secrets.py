@@ -88,8 +88,8 @@ def scan_file(filepath):
                         "file": str(filepath),
                         "line": line_num,
                         "type": pattern_name,
-                        "match": match.group()[:80],
-                        "context": line.strip()[:120]
+                        "match": "[REDACTED]",
+                        "context": "[REDACTED]"
                     })
     except Exception:
         pass
@@ -164,11 +164,13 @@ def main():
         for d in args.exclude.split(","):
             EXCLUDE_DIRS.add(d.strip())
     
-    print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
+    if args.format != "json":
+        print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
     
     findings, scanned = scan_directory(args.path)
     
-    print(f"Archivos escaneados: {scanned}")
+    if args.format != "json":
+        print(f"Archivos escaneados: {scanned}")
     
     print_findings(findings, args.format)
     
