@@ -4,7 +4,12 @@ Ejecutar:  python -X utf8 -m unittest discover -s tests -v
 """
 
 import importlib.util
+import io
+import json
+import contextlib
 import os
+import subprocess
+import sys
 import shutil
 import tempfile
 import unittest
@@ -77,6 +82,37 @@ class ExcludeFilesTest(unittest.TestCase):
             self.assertEqual(scanned, 1)
             self.assertEqual(len(findings), 1)
             self.assertEqual(findings[0]["type"], "API Key (generic)")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+    def test_secret_values_never_reach_findings_or_cli_output(self):
+        tmp = tempfile.mkdtemp(prefix="find_secrets_redaction_")
+        try:
+            fake_value = "A" * 25
+            secret_text = "api" + "_key = \"" + fake_value + "\"\n"
+            Path(tmp, "creds.txt").write_text(secret_text, encoding="utf-8")
+            findings, scanned = self.mod.scan_directory(tmp)
+            self.assertEqual(scanned, 1)
+            self.assertGreaterEqual(len(findings), 1)
+            self.assertEqual(set(findings[0]), {"file", "line", "type"})
+            self.assertNotIn(fake_value, repr(findings))
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                self.mod.print_findings(findings, "text")
+            self.assertNotIn(fake_value, stream.getvalue())
+
+            result = subprocess.run(
+                [sys.executable, str(MODULE_PATH), tmp, "--format", "json"],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            parsed = json.loads(result.stdout)
+            self.assertEqual(parsed[0]["type"], "API Key (generic)")
+            self.assertNotIn(fake_value, result.stdout)
+            self.assertNotIn("context", parsed[0])
+            self.assertNotIn("match", parsed[0])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
