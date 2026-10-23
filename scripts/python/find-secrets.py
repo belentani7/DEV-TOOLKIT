@@ -84,12 +84,12 @@ def scan_file(filepath):
                     if ".example" in filepath or ".sample" in filepath:
                         continue
                     
+                    # Only report metadata; never copy a discovered credential into
+                    # in-memory findings, logs, text output or JSON artifacts.
                     findings.append({
                         "file": str(filepath),
                         "line": line_num,
                         "type": pattern_name,
-                        "match": match.group()[:80],
-                        "context": line.strip()[:120]
                     })
     except Exception:
         pass
@@ -146,7 +146,7 @@ def print_findings(findings, format="text"):
         print(f"📋 {secret_type} ({len(items)} ocurrencias)")
         for item in items[:3]:  # Max 3 por tipo
             print(f"   {item['file']}:{item['line']}")
-            print(f"   → {item['context'][:100]}")
+            print("   → Contenido omitido por seguridad")
         if len(items) > 3:
             print(f"   ... y {len(items)-3} más")
         print()
@@ -164,11 +164,13 @@ def main():
         for d in args.exclude.split(","):
             EXCLUDE_DIRS.add(d.strip())
     
-    print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
+    if args.format != "json":
+        print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
     
     findings, scanned = scan_directory(args.path)
     
-    print(f"Archivos escaneados: {scanned}")
+    if args.format != "json":
+        print(f"Archivos escaneados: {scanned}")
     
     print_findings(findings, args.format)
     
