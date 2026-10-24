@@ -91,9 +91,9 @@ def scan_file(filepath):
                         "match": "[REDACTED]",
                         "context": "[REDACTED]"
                     })
-    except Exception:
-        pass
-    
+    except (OSError, UnicodeError) as exc:
+        raise OSError("No se pudo leer un archivo durante el escaneo") from exc
+
     return findings
 
 def scan_directory(root):
@@ -116,8 +116,8 @@ def scan_directory(root):
                 size = os.path.getsize(filepath)
                 if size > 1_000_000:  # Skip >1MB
                     continue
-            except OSError:
-                continue
+            except OSError as exc:
+                raise OSError("No se pudo obtener el tamaño de un archivo") from exc
             
             findings = scan_file(filepath)
             all_findings.extend(findings)
@@ -167,13 +167,17 @@ def main():
     if not os.path.exists(args.path):
         parser.error("La ruta indicada no existe")
 
-    print("\nEscaneando ruta solicitada\n")
-    
-    findings, scanned = scan_directory(args.path)
-    
-    print(f"Archivos escaneados: {scanned}")
-    
-    print_findings(findings, args.format)
+    try:
+        findings, scanned = scan_directory(args.path)
+    except OSError:
+        print("Error: escaneo incompleto; no se puede emitir resultado fiable", file=sys.stderr)
+        sys.exit(2)
+
+    if args.format == "json":
+        print(json.dumps({"scanned": scanned, "findings": findings}, ensure_ascii=False))
+    else:
+        print(f"Archivos escaneados: {scanned}")
+        print_findings(findings, args.format)
     
     # Exit code
     sys.exit(2 if scanned == 0 else (1 if findings else 0))
