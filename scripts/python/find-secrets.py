@@ -68,7 +68,7 @@ def should_exclude(path):
     
     return False
 
-def scan_file(filepath):
+def scan_file(filepath, display_path=None):
     """Escanea un archivo buscando secrets."""
     findings = []
     
@@ -85,7 +85,7 @@ def scan_file(filepath):
                         continue
                     
                     findings.append({
-                        "file": str(filepath),
+                        "file": display_path if display_path is not None else os.path.basename(filepath),
                         "line": line_num,
                         "type": pattern_name,
                         "match": "[REDACTED]",
@@ -100,8 +100,15 @@ def scan_directory(root):
     """Escanea un directorio recursivamente."""
     all_findings = []
     scanned = 0
-    
-    for dirpath, dirnames, filenames in os.walk(root):
+    root = os.path.abspath(root)
+    if not os.path.isdir(root):
+        raise OSError("El destino no es un directorio legible")
+
+    def raise_walk_error(error):
+        # os.walk discards permission/read failures without onerror.
+        raise OSError("No se pudo recorrer un directorio durante el escaneo") from error
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=raise_walk_error):
         # Filtrar directorios excluidos
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
         
@@ -119,7 +126,9 @@ def scan_directory(root):
             except OSError as exc:
                 raise OSError("No se pudo obtener el tamaño de un archivo") from exc
             
-            findings = scan_file(filepath)
+            # Keep output portable; absolute scan roots can reveal user paths.
+            relative_path = Path(os.path.relpath(filepath, root)).as_posix()
+            findings = scan_file(filepath, display_path=relative_path)
             all_findings.extend(findings)
             scanned += 1
     
