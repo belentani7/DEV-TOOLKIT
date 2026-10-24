@@ -88,8 +88,8 @@ def scan_file(filepath):
                         "file": str(filepath),
                         "line": line_num,
                         "type": pattern_name,
-                        "match": match.group()[:80],
-                        "context": line.strip()[:120]
+                        "match": "[REDACTED]",
+                        "context": "[REDACTED]"
                     })
     except Exception:
         pass
@@ -132,7 +132,7 @@ def print_findings(findings, format="text"):
         return
     
     if not findings:
-        print("\n✅ No se encontraron secrets")
+        print("\nNo se detectaron coincidencias en los archivos analizados (no garantiza ausencia de secretos)")
         return
     
     print(f"\n⚠️  {len(findings)} secrets potenciales encontrados:\n")
@@ -146,7 +146,7 @@ def print_findings(findings, format="text"):
         print(f"📋 {secret_type} ({len(items)} ocurrencias)")
         for item in items[:3]:  # Max 3 por tipo
             print(f"   {item['file']}:{item['line']}")
-            print(f"   → {item['context'][:100]}")
+            print("   → [REDACTED]")
         if len(items) > 3:
             print(f"   ... y {len(items)-3} más")
         print()
@@ -164,7 +164,10 @@ def main():
         for d in args.exclude.split(","):
             EXCLUDE_DIRS.add(d.strip())
     
-    print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
+    if not os.path.exists(args.path):
+        parser.error("La ruta indicada no existe")
+
+    print("\nEscaneando ruta solicitada\n")
     
     findings, scanned = scan_directory(args.path)
     
@@ -173,7 +176,7 @@ def main():
     print_findings(findings, args.format)
     
     # Exit code
-    sys.exit(1 if findings else 0)
+    sys.exit(2 if scanned == 0 else (1 if findings else 0))
 
 if __name__ == "__main__":
     main()
