@@ -5,6 +5,9 @@ Ejecutar:  python -X utf8 -m unittest discover -s tests -v
 
 import importlib.util
 import os
+import json
+import subprocess
+import sys
 import shutil
 import tempfile
 import unittest
@@ -121,6 +124,34 @@ class ExcludeFilesTest(unittest.TestCase):
             f.flush()
             with self.assertRaises(OSError):
                 self.mod.scan_directory(f.name)
+
+
+    def test_cli_json_exit_codes_and_redaction(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_cli_") as tmp:
+            path = os.path.join(tmp, "config.env")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("nothing sensitive here" + chr(10))
+
+            command = [sys.executable, str(MODULE_PATH), tmp, "--format", "json"]
+            clean = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
+            self.assertEqual(json.loads(clean.stdout), {"scanned": 1, "findings": []})
+
+            fake_key = "C" * 24
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("api" + "_key=" + fake_key + chr(10))
+            found = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(found.returncode, 1, found.stderr)
+            payload = json.loads(found.stdout)
+            self.assertEqual(payload["scanned"], 1)
+            self.assertEqual(payload["findings"][0]["file"], "config.env")
+            self.assertNotIn(fake_key, found.stdout)
+            self.assertNotIn(tmp, found.stdout)
+
+            os.remove(path)
+            empty = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(empty.returncode, 2)
+            self.assertEqual(json.loads(empty.stdout), {"scanned": 0, "findings": []})
 
 
 if __name__ == "__main__":
