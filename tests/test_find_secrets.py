@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -79,6 +80,47 @@ class ExcludeFilesTest(unittest.TestCase):
             self.assertEqual(findings[0]["type"], "API Key (generic)")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+    def test_results_hide_secret_values_and_absolute_root(self):
+        tmp = tempfile.mkdtemp(prefix="scanner_private_path_")
+        try:
+            nested = os.path.join(tmp, "src")
+            os.makedirs(nested)
+            value = "B" * 24
+            with open(os.path.join(nested, "app.env"), "w", encoding="utf-8") as fh:
+                fh.write("api" + "_key = " + '"' + value + '"' + "\\n")
+            findings, scanned = self.mod.scan_directory(tmp)
+            self.assertEqual(scanned, 1)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["file"], "src/app.env")
+            self.assertEqual(findings[0]["match"], "[REDACTED]")
+            self.assertEqual(findings[0]["context"], "[REDACTED]")
+            self.assertNotIn(tmp, repr(findings))
+            self.assertNotIn(value, repr(findings))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_directory_walk_errors_are_not_reported_as_clean(self):
+        tmp = tempfile.mkdtemp(prefix="scanner_walk_error_")
+        try:
+            def broken_walk(root, onerror=None):
+                self.assertIsNotNone(onerror)
+                onerror(PermissionError("Access denied"))
+                yield root, [], []
+
+            with mock.patch.object(self.mod.os, "walk", broken_walk):
+                with self.assertRaises(OSError):
+                    self.mod.scan_directory(tmp)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_file_path_is_not_misreported_as_directory_scan(self):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as f:
+            f.write("test")
+            f.flush()
+            with self.assertRaises(OSError):
+                self.mod.scan_directory(f.name)
 
 
 if __name__ == "__main__":
