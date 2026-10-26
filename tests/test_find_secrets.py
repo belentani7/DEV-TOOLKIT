@@ -154,5 +154,58 @@ class ExcludeFilesTest(unittest.TestCase):
             self.assertEqual(json.loads(empty.stdout), {"scanned": 0, "findings": []})
 
 
+    def test_invalid_utf8_is_incomplete_not_clean(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_bad_utf8_") as tmp:
+            Path(tmp, "valid.txt").write_text("ordinary text\n", encoding="utf-8")
+            Path(tmp, "invalid.txt").write_bytes(b"token=bad\xffvalue\n")
+            with self.assertRaises(OSError):
+                self.mod.scan_directory(tmp)
+
+    def test_oversized_file_is_incomplete_not_clean(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_large_") as tmp:
+            Path(tmp, "valid.txt").write_text("ordinary text\n", encoding="utf-8")
+            Path(tmp, "large.txt").write_bytes(b"x" * 1_000_001)
+            with self.assertRaises(OSError):
+                self.mod.scan_directory(tmp)
+
+    def test_cli_incomplete_scan_exits_two_without_clean_result(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_cli_large_") as tmp:
+            Path(tmp, "valid.txt").write_text("ordinary text\n", encoding="utf-8")
+            Path(tmp, "large.txt").write_bytes(b"x" * 1_000_001)
+            result = subprocess.run(
+                [sys.executable, str(MODULE_PATH), tmp, "--format", "json"],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("incompleto", result.stderr)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unsupported")
+    def test_file_symlink_is_rejected_without_reading_external_data(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_link_root_") as tmp:
+            with tempfile.TemporaryDirectory(prefix="scanner_link_external_") as outside:
+                Path(tmp, "valid.txt").write_text("ordinary text\n", encoding="utf-8")
+                target = Path(outside, "outside.txt")
+                target.write_text("api" + "_key=" + "D" * 24, encoding="utf-8")
+                try:
+                    os.symlink(target, Path(tmp, "linked.txt"))
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"symlinks unavailable: {exc}")
+                with self.assertRaises(OSError):
+                    self.mod.scan_directory(tmp)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks unsupported")
+    def test_directory_symlink_is_not_silently_skipped(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_link_root_") as tmp:
+            with tempfile.TemporaryDirectory(prefix="scanner_link_external_") as outside:
+                Path(tmp, "valid.txt").write_text("ordinary text\n", encoding="utf-8")
+                Path(outside, "external.txt").write_text("ordinary text\n", encoding="utf-8")
+                try:
+                    os.symlink(outside, Path(tmp, "linked-dir"), target_is_directory=True)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"symlinks unavailable: {exc}")
+                with self.assertRaises(OSError):
+                    self.mod.scan_directory(tmp)
+
 if __name__ == "__main__":
     unittest.main()

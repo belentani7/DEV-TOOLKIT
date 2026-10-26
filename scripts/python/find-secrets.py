@@ -73,7 +73,7 @@ def scan_file(filepath, display_path=None):
     findings = []
     
     try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, "r", encoding="utf-8", errors="strict") as f:
             lines = f.readlines()
             
         for line_num, line in enumerate(lines, 1):
@@ -109,20 +109,25 @@ def scan_directory(root):
         raise OSError("No se pudo recorrer un directorio durante el escaneo") from error
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=raise_walk_error):
-        # Filtrar directorios excluidos
+        # No ocultar subárboles omitidos ni leer fuera del destino a través
+        # de enlaces simbólicos. Los directorios excluidos siguen excluidos.
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
-        
+        if any(os.path.islink(os.path.join(dirpath, d)) for d in dirnames):
+            raise OSError("Directorio enlazado: escaneo incompleto")
+
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            
+
             if should_exclude(filepath):
                 continue
-            
-            # Solo archivos de texto
+            if os.path.islink(filepath):
+                raise OSError("Archivo enlazado: escaneo incompleto")
+
+            # Un archivo demasiado grande no puede contarse como analizado.
             try:
                 size = os.path.getsize(filepath)
-                if size > 1_000_000:  # Skip >1MB
-                    continue
+                if size > 1_000_000:
+                    raise OSError("Archivo demasiado grande: escaneo incompleto")
             except OSError as exc:
                 raise OSError("No se pudo obtener el tamaño de un archivo") from exc
             
