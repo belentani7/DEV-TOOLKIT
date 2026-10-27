@@ -104,6 +104,47 @@ class ExcludeFilesTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_real_credentials_in_example_and_sample_paths_are_detected(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_example_paths_") as tmp:
+            for folder in (".examples", ".samples"):
+                base = Path(tmp, folder)
+                base.mkdir()
+                for filename in ("config.example", "config.sample"):
+                    value = "F" * 24
+                    (base / filename).write_text(
+                        "api" + "_key=" + value + "\n", encoding="utf-8"
+                    )
+            findings, scanned = self.mod.scan_directory(tmp)
+            self.assertEqual(scanned, 4)
+            self.assertEqual(len(findings), 4)
+            self.assertEqual(
+                {item["file"] for item in findings},
+                {
+                    f"{folder}/{filename}"
+                    for folder in (".examples", ".samples")
+                    for filename in ("config.example", "config.sample")
+                },
+            )
+            self.assertTrue(all(item["match"] == "[REDACTED]" for item in findings))
+
+    def test_excluded_parent_of_scan_root_does_not_hide_project_files(self):
+        with tempfile.TemporaryDirectory(prefix="scanner_parent_") as tmp:
+            project = Path(tmp, "build", "project")
+            project.mkdir(parents=True)
+            (project / "app.env").write_text(
+                "api" + "_key=" + "G" * 24 + "\n", encoding="utf-8"
+            )
+            excluded = project / "node_modules"
+            excluded.mkdir()
+            (excluded / "ignored.env").write_text(
+                "api" + "_key=" + "H" * 24 + "\n", encoding="utf-8"
+            )
+            findings, scanned = self.mod.scan_directory(project)
+            self.assertEqual(scanned, 1)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["file"], "app.env")
+
+
     def test_directory_walk_errors_are_not_reported_as_clean(self):
         tmp = tempfile.mkdtemp(prefix="scanner_walk_error_")
         try:

@@ -80,10 +80,8 @@ def scan_file(filepath, display_path=None):
             for pattern_name, regex in PATTERNS.items():
                 matches = re.finditer(regex, line, re.IGNORECASE)
                 for match in matches:
-                    # No reportar en archivos de ejemplo/config
-                    if ".example" in filepath or ".sample" in filepath:
-                        continue
-                    
+                    # Las rutas de ejemplo pueden contener credenciales reales.
+                    # No excluir coincidencias basándose en nombres de archivo.
                     findings.append({
                         "file": display_path if display_path is not None else os.path.basename(filepath),
                         "line": line_num,
@@ -118,7 +116,9 @@ def scan_directory(root):
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
 
-            if should_exclude(filepath):
+            # Evaluar exclusiones dentro de la raíz solicitada, no en sus ancestros.
+            relative_path = Path(os.path.relpath(filepath, root)).as_posix()
+            if should_exclude(relative_path):
                 continue
             if os.path.islink(filepath):
                 raise OSError("Archivo enlazado: escaneo incompleto")
@@ -132,7 +132,6 @@ def scan_directory(root):
                 raise OSError("No se pudo obtener el tamaño de un archivo") from exc
             
             # Keep output portable; absolute scan roots can reveal user paths.
-            relative_path = Path(os.path.relpath(filepath, root)).as_posix()
             findings = scan_file(filepath, display_path=relative_path)
             all_findings.extend(findings)
             scanned += 1
