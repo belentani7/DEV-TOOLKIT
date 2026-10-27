@@ -68,58 +68,71 @@ def should_exclude(path):
     
     return False
 
-def scan_file(filepath):
+def scan_file(filepath, display_path=None):
     """Escanea un archivo buscando secrets."""
     findings = []
     
     try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, "r", encoding="utf-8", errors="strict") as f:
             lines = f.readlines()
             
         for line_num, line in enumerate(lines, 1):
             for pattern_name, regex in PATTERNS.items():
                 matches = re.finditer(regex, line, re.IGNORECASE)
                 for match in matches:
-                    # No reportar en archivos de ejemplo/config
-                    if ".example" in filepath or ".sample" in filepath:
-                        continue
-                    
+                    # Las rutas de ejemplo pueden contener credenciales reales.
+                    # No excluir coincidencias basándose en nombres de archivo.
                     findings.append({
-                        "file": str(filepath),
+                        "file": display_path if display_path is not None else os.path.basename(filepath),
                         "line": line_num,
                         "type": pattern_name,
-                        "match": match.group()[:80],
-                        "context": line.strip()[:120]
+                        "match": "[REDACTED]",
+                        "context": "[REDACTED]"
                     })
-    except Exception:
-        pass
-    
+    except (OSError, UnicodeError) as exc:
+        raise OSError("No se pudo leer un archivo durante el escaneo") from exc
+
     return findings
 
 def scan_directory(root):
     """Escanea un directorio recursivamente."""
     all_findings = []
     scanned = 0
-    
-    for dirpath, dirnames, filenames in os.walk(root):
-        # Filtrar directorios excluidos
+    root = os.path.abspath(root)
+    if not os.path.isdir(root):
+        raise OSError("El destino no es un directorio legible")
+
+    def raise_walk_error(error):
+        # os.walk discards permission/read failures without onerror.
+        raise OSError("No se pudo recorrer un directorio durante el escaneo") from error
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=raise_walk_error):
+        # No ocultar subárboles omitidos ni leer fuera del destino a través
+        # de enlaces simbólicos. Los directorios excluidos siguen excluidos.
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
-        
+        if any(os.path.islink(os.path.join(dirpath, d)) for d in dirnames):
+            raise OSError("Directorio enlazado: escaneo incompleto")
+
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            
-            if should_exclude(filepath):
+
+            # Evaluar exclusiones dentro de la raíz solicitada, no en sus ancestros.
+            relative_path = Path(os.path.relpath(filepath, root)).as_posix()
+            if should_exclude(relative_path):
                 continue
-            
-            # Solo archivos de texto
+            if os.path.islink(filepath):
+                raise OSError("Archivo enlazado: escaneo incompleto")
+
+            # Un archivo demasiado grande no puede contarse como analizado.
             try:
                 size = os.path.getsize(filepath)
-                if size > 1_000_000:  # Skip >1MB
-                    continue
-            except OSError:
-                continue
+                if size > 1_000_000:
+                    raise OSError("Archivo demasiado grande: escaneo incompleto")
+            except OSError as exc:
+                raise OSError("No se pudo obtener el tamaño de un archivo") from exc
             
-            findings = scan_file(filepath)
+            # Keep output portable; absolute scan roots can reveal user paths.
+            findings = scan_file(filepath, display_path=relative_path)
             all_findings.extend(findings)
             scanned += 1
     
@@ -132,7 +145,7 @@ def print_findings(findings, format="text"):
         return
     
     if not findings:
-        print("\n✅ No se encontraron secrets")
+        print("\nNo se detectaron coincidencias en los archivos analizados (no garantiza ausencia de secretos)")
         return
     
     print(f"\n⚠️  {len(findings)} secrets potenciales encontrados:\n")
@@ -146,7 +159,7 @@ def print_findings(findings, format="text"):
         print(f"📋 {secret_type} ({len(items)} ocurrencias)")
         for item in items[:3]:  # Max 3 por tipo
             print(f"   {item['file']}:{item['line']}")
-            print(f"   → {item['context'][:100]}")
+            print("   → [REDACTED]")
         if len(items) > 3:
             print(f"   ... y {len(items)-3} más")
         print()
@@ -164,16 +177,23 @@ def main():
         for d in args.exclude.split(","):
             EXCLUDE_DIRS.add(d.strip())
     
-    print(f"\n🔍 Escaneando: {os.path.abspath(args.path)}\n")
-    
-    findings, scanned = scan_directory(args.path)
-    
-    print(f"Archivos escaneados: {scanned}")
-    
-    print_findings(findings, args.format)
+    if not os.path.exists(args.path):
+        parser.error("La ruta indicada no existe")
+
+    try:
+        findings, scanned = scan_directory(args.path)
+    except OSError:
+        print("Error: escaneo incompleto; no se puede emitir resultado fiable", file=sys.stderr)
+        sys.exit(2)
+
+    if args.format == "json":
+        print(json.dumps({"scanned": scanned, "findings": findings}, ensure_ascii=False))
+    else:
+        print(f"Archivos escaneados: {scanned}")
+        print_findings(findings, args.format)
     
     # Exit code
-    sys.exit(1 if findings else 0)
+    sys.exit(2 if scanned == 0 else (1 if findings else 0))
 
 if __name__ == "__main__":
     main()
